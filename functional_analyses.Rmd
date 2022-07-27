@@ -1,0 +1,781 @@
+---
+title: "Functional analyses"
+author: Cassie Litchfield
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(cache=FALSE, echo = TRUE,
+                      message=FALSE, warning=FALSE, eval = FALSE)
+```
+
+```{r}
+library(dplyr)
+library(fgsea)
+library(readxl)
+library(openxlsx)
+library(limma)
+library(ggplot2)
+library(ggpubr)
+library(RColorBrewer)
+library(GSA)
+library(VennDiagram)
+library(pheatmap)
+indir <- "/researchers/simon.keam/RNA-QuantSeq/220120_NB501056_0747_AHFFW7BGXL/analyses/"
+```
+
+```{r}
+de_analyses_fn <- list.files(indir, ".*vs.*.csv")
+mouse_human_map <- read.csv("~/Data/gene_sets/Mouse_human_map.csv")
+outdir <- "/researchers/simon.keam/RNA-QuantSeq/220120_NB501056_0747_AHFFW7BGXL/analyses/gsea/"
+```
+
+# FGSEA - immune pathways
+
+```{r}
+# Load signatures of interest
+# Read in immune & macrophage signatures - sheet 3 & sheet 4
+signatures <- read_excel(paste0("~/Haupt_ExpB_LungProject/don_de_analyses/Freudenstein Supplementary Data 1-12.xlsx"), sheet = 3, skip = 2)
+paths <- apply(signatures,2,as.list)
+paths <- lapply(paths,function(x) x[!is.na(x)])
+
+signatures <- read_excel(paste0("~/Haupt_ExpB_LungProject/don_de_analyses/Freudenstein Supplementary Data 1-12.xlsx"), sheet = 4, skip = 2)
+paths2 <- apply(signatures,2,as.list)
+paths2 <- lapply(paths2,function(x) x[!is.na(x)])
+
+paths <- c(paths,paths2)
+
+```
+
+```{r}
+for(i in de_analyses_fn){
+    comparison.set <- gsub(".csv","",i)
+      
+    # Read DE analyses results
+    pre.ranked <- read.csv(paste0(indir,i), header = T)
+    
+    # Convert house symbols to human
+     pre.ranked$SYMBOL_human <- mouse_human_map[match(pre.ranked$SYMBOL,mouse_human_map$mgi_symbol),"hgnc_symbol"]
+    # Rm NA genes
+     pre.ranked <- pre.ranked %>%
+       filter(!SYMBOL_human == "")
+     
+    # Process pre-ranked table
+    pre.ranked$rank <- pre.ranked$logFC*(1- pre.ranked$adj.P.Val) # Ranking metric
+    stats <- as.numeric(pre.ranked$rank)
+    names(stats) <- pre.ranked$SYMBOL_human
+    
+    # Run GSEA
+    fgsea.C <- fgsea(pathways=paths, stats=stats, nperm=10000)
+    fgsea.C$ComparisonSet =  comparison.set
+    fgsea.C=fgsea.C[, c('ComparisonSet', 'pathway', 'padj', 'NES', 'size', 'leadingEdge')]
+    
+    fgsea.C$Significant <- ifelse(fgsea.C$padj < 0.05, TRUE, FALSE)
+    fgsea.C <- apply(fgsea.C,2,as.character)
+    #fgsea.C$leadingEdge <- unlist(lapply(fgsea.C$leadingEdge,function(x) paste(x,collapse = ",")))
+    write.csv(fgsea.C,paste0(outdir,comparison.set,"_gsea.csv"))
+  }
+
+```
+
+# FGSEA -KEGG
+
+```{r}
+KEGG <- GSA.read.gmt("~/Data/gene_sets/c2.cp.kegg.v7.5.1.symbols.gmt")
+KEGG_pathways <- KEGG$genesets
+names(KEGG_pathways) <- KEGG$geneset.names
+```
+
+
+
+```{r}
+for(i in de_analyses_fn){
+    comparison.set <- gsub(".csv","",i)
+      
+    # Read DE analyses results
+    pre.ranked <- read.csv(paste0(indir,i), header = T)
+    
+    # Convert house symbols to human
+     pre.ranked$SYMBOL_human <- mouse_human_map[match(pre.ranked$SYMBOL,mouse_human_map$mgi_symbol),"hgnc_symbol"]
+    # Rm NA genes
+     pre.ranked <- pre.ranked %>%
+       filter(!SYMBOL_human == "")
+     
+    # Process pre-ranked table
+    pre.ranked$rank <- pre.ranked$logFC*(1- pre.ranked$adj.P.Val) # Ranking metric
+    stats <- as.numeric(pre.ranked$rank)
+    names(stats) <- pre.ranked$SYMBOL_human
+    
+    # Run GSEA
+    fgsea.C <- fgsea(pathways=KEGG_pathways, stats=stats, nperm=10000)
+    fgsea.C$ComparisonSet =  comparison.set
+    fgsea.C=fgsea.C[, c('ComparisonSet', 'pathway', 'padj', 'NES', 'size', 'leadingEdge')]
+    
+    fgsea.C$Significant <- ifelse(fgsea.C$padj < 0.05, TRUE, FALSE)
+    fgsea.C <- apply(fgsea.C,2,as.character)
+    #fgsea.C$leadingEdge <- unlist(lapply(fgsea.C$leadingEdge,function(x) paste(x,collapse = ",")))
+    write.csv(fgsea.C,paste0(outdir,comparison.set,"_gsea_KEGG.csv"))
+  }
+
+```
+
+
+# FGSEA -HALLMARK
+
+```{r}
+HM <- GSA.read.gmt("~/Data/gene_sets/h.all.v7.2.symbols.gmt")
+HM_pathways <- HM$genesets
+names(HM_pathways) <- HM$geneset.names
+```
+
+
+
+```{r}
+for(i in de_analyses_fn){
+    comparison.set <- gsub(".csv","",i)
+      
+    # Read DE analyses results
+    pre.ranked <- read.csv(paste0(indir,i), header = T)
+    
+    # Convert house symbols to human
+     pre.ranked$SYMBOL_human <- mouse_human_map[match(pre.ranked$SYMBOL,mouse_human_map$mgi_symbol),"hgnc_symbol"]
+    # Rm NA genes
+     pre.ranked <- pre.ranked %>%
+       filter(!SYMBOL_human == "")
+     
+    # Process pre-ranked table
+    pre.ranked$rank <- pre.ranked$logFC*(1- pre.ranked$adj.P.Val) # Ranking metric
+    stats <- as.numeric(pre.ranked$rank)
+    names(stats) <- pre.ranked$SYMBOL_human
+    
+    # Run GSEA
+    fgsea.C <- fgsea(pathways=HM_pathways, stats=stats, nperm=10000)
+    fgsea.C$ComparisonSet =  comparison.set
+    fgsea.C=fgsea.C[, c('ComparisonSet', 'pathway', 'padj', 'NES', 'size', 'leadingEdge')]
+    
+    fgsea.C$Significant <- ifelse(fgsea.C$padj < 0.05, TRUE, FALSE)
+    fgsea.C <- apply(fgsea.C,2,as.character)
+    #fgsea.C$leadingEdge <- unlist(lapply(fgsea.C$leadingEdge,function(x) paste(x,collapse = ",")))
+    write.csv(fgsea.C,paste0(outdir,comparison.set,"_gsea_HALLMARK.csv"))
+}
+```
+
+Plot hallmark paths.
+Early timepoint.
+```{r}
+GROUP_ORDER <- c("TP53_R172vsControl", "TP53_R172vsTP53null", "TP53_R245vsControl", "TP53_R245vsTP53null", "TP53nullvsControl", "TP53_R172vsTP53_R245")
+PATH_ORDER <- c("HALLMARK_EPITHELIAL_MESENCHYMAL_TRANSITION", "HALLMARK_E2F_TARGETS", "HALLMARK_G2M_CHECKPOINT", "HALLMARK_ANGIOGENESIS","HALLMARK_HYPOXIA")
+```
+
+```{r}
+comparison.sets <- gsub(".csv","",de_analyses_fn) 
+Early_TP <- comparison.sets[grepl("Early",comparison.sets) & !grepl("Late",comparison.sets)]
+hallmark_results_fn <- paste0(outdir,Early_TP,"_gsea_HALLMARK.csv")
+hallmark_results <- lapply(hallmark_results_fn, read.csv)
+names(hallmark_results) <- gsub("_Early","",Early_TP)
+
+hallmark_results_df <- bind_rows(hallmark_results, .id = "group")
+
+# Signficant only
+hallmark_results_df <- hallmark_results_df %>%
+  filter(padj < 0.05)
+
+# Order by number of sig paths
+n_paths <- hallmark_results_df %>%
+  group_by(pathway) %>%
+  summarise(n = n()) %>%
+  arrange(n)
+
+# Override order
+my_order <- c(n_paths$pathway[!n_paths$pathway %in% PATH_ORDER], rev(PATH_ORDER))
+
+hallmark_results_df <- hallmark_results_df %>%
+  mutate(pathway = factor(pathway, levels = my_order)) %>%
+  mutate(group = factor(group, levels = GROUP_ORDER))
+  
+ggplot(hallmark_results_df, aes(x = NES, y = pathway, colour = group, shape = group)) +
+  geom_point(stroke = 2, size = 4) + scale_colour_manual(values = c("#1B9E77", "#7570B3","#00008B","#E78AC3","#FFF788","#A6D854")) + theme_bw() +
+  scale_shape_manual(values = c(2,2,1,1,4,0)) +
+  labs(colour = "12 Weeks", shape = "12 Weeks") + guides(size = F)
+ggsave(paste0(outdir,"HALLMARK_gsea_early.pdf"), width = 10, height = 7*0.56)
+
+ggplot(hallmark_results_df, aes(x = NES, y = pathway, colour = group, shape = group)) +
+  geom_point(stroke = 2, size = 3) + scale_colour_manual(values = c("#1B9E77", "#7570B3","#00008B","#E78AC3","#FFF788","#A6D854")) + theme_bw() +
+  scale_shape_manual(values = c(2,2,1,1,4,0)) +
+  labs(colour = "12 Weeks", shape = "12 Weeks") + guides(size = F) +
+  facet_grid(~group) + theme(strip.background = element_blank(),
+   strip.text.x = element_blank())
+ggsave(paste0(outdir,"HALLMARK_gsea_early_v2.pdf"), width = 15, height = 7*0.56)
+
+```
+
+```{r}
+PATH_ORDER <- c("HALLMARK_EPITHELIAL_MESENCHYMAL_TRANSITION", "HALLMARK_E2F_TARGETS", "HALLMARK_G2M_CHECKPOINT", "HALLMARK_ANGIOGENESIS","HALLMARK_MYC_TARGETS_V1","HALLMARK_MITOTIC_SPINDLE","HALLMARK_GLYCOLYSIS","HALLMARK_UV_RESPONSE_DN","HALLMARK_UNFOLDED_PROTEIN_RESPONSE","HALLMARK_HYPOXIA","HALLMARK_MYC_TARGETS_V2","HALLMARK_INFLAMMATORY_RESPONSE")
+LAST_PATHS <- c("HALLMARK_ESTROGEN_RESPONSE_EARLY","HALLMARK_ESTROGEN_RESPONSE_LATE","HALLMARK_KRAS_SIGNALING_DN","HALLMARK_BILE_ACID_METABOLISM")
+```
+
+Late timepoint.
+```{r}
+comparison.sets <- gsub(".csv","",de_analyses_fn)
+Late_TP <- comparison.sets[!grepl("Early",comparison.sets) & grepl("Late",comparison.sets)]
+hallmark_results_fn <- paste0(outdir,Late_TP,"_gsea_HALLMARK.csv")
+hallmark_results <- lapply(hallmark_results_fn, read.csv)
+names(hallmark_results) <- gsub("_Late","",Late_TP)
+
+hallmark_results_df <- bind_rows(hallmark_results, .id = "group")
+
+# Signficant only
+hallmark_results_df <- hallmark_results_df %>%
+  filter(padj < 0.05)
+
+# Order by number of sig paths
+n_paths <- hallmark_results_df %>%
+  group_by(pathway) %>%
+  summarise(n = n()) %>%
+  arrange(n)
+
+# Override order
+my_order <- c(LAST_PATHS, n_paths$pathway[!n_paths$pathway %in% PATH_ORDER &
+                                            !n_paths$pathway %in% LAST_PATHS], rev(PATH_ORDER))
+
+hallmark_results_df <- hallmark_results_df %>%
+  mutate(pathway = factor(pathway, levels = my_order)) %>%
+  mutate(group = factor(group, levels = GROUP_ORDER))
+
+ggplot(hallmark_results_df, aes(x = NES, y = pathway, colour = group, shape = group)) +
+  geom_point(stroke = 2, size = 4) + scale_colour_manual(values = c("#1B9E77", "#7570B3","#00008B","#E78AC3","#FFF788","#A6D854"), drop = F) + theme_bw() +
+  scale_shape_manual(values = c(2,2,1,1,4,0), drop = F) +
+  labs(colour = "End Point", shape = "End Point") + guides(size = F)
+ggsave(paste0(outdir,"HALLMARK_gsea_late.pdf"), width = 10, height = 7)
+
+ggplot(hallmark_results_df, aes(x = NES, y = pathway, colour = group, shape = group)) +
+  geom_point(stroke = 2, size = 4) + scale_colour_manual(values = c("#1B9E77", "#7570B3","#00008B","#E78AC3","#FFF788","#A6D854"), drop = F) + theme_bw() +
+  scale_shape_manual(values = c(2,2,1,1,4,0), drop = F) +
+  labs(colour = "End Point", shape = "End Point") + guides(size = F) +
+  facet_grid(~group) + theme(strip.background = element_blank(),
+   strip.text.x = element_blank())
+ggsave(paste0(outdir,"HALLMARK_gsea_late_v2.pdf"), width = 15, height = 7)
+```
+Early vs Late.
+```{r}
+GROUP_ORDER <- c("Control", "TP53null", "TP53_R172", "TP53_R245")
+
+comparison.sets <- gsub(".csv","",de_analyses_fn)
+TP <- comparison.sets[grepl("Early",comparison.sets) & grepl("Late",comparison.sets)]
+hallmark_results_fn <- paste0(outdir,TP,"_gsea_HALLMARK.csv")
+hallmark_results <- lapply(hallmark_results_fn, read.csv)
+names(hallmark_results) <- gsub("_Late","",TP)
+names(hallmark_results) <- gsub("_Early","",names(hallmark_results))
+names(hallmark_results) <- gsub("vs.*","",names(hallmark_results))
+
+hallmark_results_df <- bind_rows(hallmark_results, .id = "group")
+
+# Signficant only
+hallmark_results_df <- hallmark_results_df %>%
+  filter(padj < 0.05)
+
+# Order by number of sig paths
+n_paths <- hallmark_results_df %>%
+  group_by(pathway) %>%
+  summarise(n = n()) %>%
+  arrange(n)
+
+hallmark_results_df <- hallmark_results_df %>%
+  mutate(pathway = factor(pathway, levels = n_paths$pathway)) %>%
+  mutate(group = factor(group, levels = GROUP_ORDER))
+
+# Need to plot -1* NES since all comparisons are late vs early and we want to plot early vs late
+hallmark_results_df <- hallmark_results_df %>%
+  mutate(NES = -1*NES)
+ggplot(hallmark_results_df, aes(x = NES, y = pathway, colour = group, shape = group)) +
+  geom_point(stroke = 2, size = 4) + scale_colour_manual(values = c("#8DD3C7","#80B1D3","#BEBADA","#FB8072"), drop = F) + theme_bw() +
+  scale_shape_manual(values = c(2,2,1,1,4,0), drop = F) +
+  labs(colour = "12 Weeks vs End Point", shape = "12 Weeks vs End Point") + guides(size = F) +
+  facet_grid(~group) + theme(strip.background = element_blank(),
+   strip.text.x = element_blank())
+ggsave(paste0(outdir,"HALLMARK_gsea_early_v_late.pdf"), width = 15, height = 7)
+```
+
+# FGSEA - C6 oncogenic
+
+```{r}
+HM <- GSA.read.gmt("~/Data/gene_sets/c6.all.v7.5.1.symbols.gmt")
+HM_pathways <- HM$genesets
+names(HM_pathways) <- HM$geneset.names
+```
+
+
+
+```{r}
+for(i in de_analyses_fn){
+    comparison.set <- gsub(".csv","",i)
+      
+    # Read DE analyses results
+    pre.ranked <- read.csv(paste0(indir,i), header = T)
+    
+    # Convert house symbols to human
+     pre.ranked$SYMBOL_human <- mouse_human_map[match(pre.ranked$SYMBOL,mouse_human_map$mgi_symbol),"hgnc_symbol"]
+    # Rm NA genes
+     pre.ranked <- pre.ranked %>%
+       filter(!SYMBOL_human == "")
+     
+    # Process pre-ranked table
+    pre.ranked$rank <- pre.ranked$logFC*(1- pre.ranked$adj.P.Val) # Ranking metric
+    stats <- as.numeric(pre.ranked$rank)
+    names(stats) <- pre.ranked$SYMBOL_human
+    
+    # Run GSEA
+    fgsea.C <- fgsea(pathways=HM_pathways, stats=stats, nperm=10000)
+    fgsea.C$ComparisonSet =  comparison.set
+    fgsea.C=fgsea.C[, c('ComparisonSet', 'pathway', 'padj', 'NES', 'size', 'leadingEdge')]
+    
+    fgsea.C$Significant <- ifelse(fgsea.C$padj < 0.05, TRUE, FALSE)
+    fgsea.C <- apply(fgsea.C,2,as.character)
+    #fgsea.C$leadingEdge <- unlist(lapply(fgsea.C$leadingEdge,function(x) paste(x,collapse = ",")))
+    write.csv(fgsea.C,paste0(outdir,comparison.set,"_gsea_C6_oncogenic.csv"))
+}
+```
+
+# FGSEA - C7 immunologic
+
+```{r}
+HM <- GSA.read.gmt("~/Data/gene_sets/c7.all.v7.5.1.symbols.gmt")
+HM_pathways <- HM$genesets
+names(HM_pathways) <- HM$geneset.names
+```
+
+
+
+```{r}
+for(i in de_analyses_fn){
+    comparison.set <- gsub(".csv","",i)
+      
+    # Read DE analyses results
+    pre.ranked <- read.csv(paste0(indir,i), header = T)
+    
+    # Convert house symbols to human
+     pre.ranked$SYMBOL_human <- mouse_human_map[match(pre.ranked$SYMBOL,mouse_human_map$mgi_symbol),"hgnc_symbol"]
+    # Rm NA genes
+     pre.ranked <- pre.ranked %>%
+       filter(!SYMBOL_human == "")
+     
+    # Process pre-ranked table
+    pre.ranked$rank <- pre.ranked$logFC*(1- pre.ranked$adj.P.Val) # Ranking metric
+    stats <- as.numeric(pre.ranked$rank)
+    names(stats) <- pre.ranked$SYMBOL_human
+    
+    # Run GSEA
+    fgsea.C <- fgsea(pathways=HM_pathways, stats=stats, nperm=10000)
+    fgsea.C$ComparisonSet =  comparison.set
+    fgsea.C=fgsea.C[, c('ComparisonSet', 'pathway', 'padj', 'NES', 'size', 'leadingEdge')]
+    
+    fgsea.C$Significant <- ifelse(fgsea.C$padj < 0.05, TRUE, FALSE)
+    fgsea.C <- apply(fgsea.C,2,as.character)
+    #fgsea.C$leadingEdge <- unlist(lapply(fgsea.C$leadingEdge,function(x) paste(x,collapse = ",")))
+    write.csv(fgsea.C,paste0(outdir,comparison.set,"_gsea_C7_immunogenic.csv"))
+}
+```
+
+# Plot FGSEA 
+
+```{r}
+  for(i in de_analyses_fn){
+    comparison.set <- gsub(".csv","",i)
+    fgsea.C <- read.csv(paste0(outdir,comparison.set,"_gsea.csv"))
+    
+
+    # Flip the ordering for readability
+    if(comparison.set == "TP53_R172_EarlyvsTP53_R245_Early"){
+      comparison.set <- "TP53_R245_EarlyvsTP53_R172_Early"
+      fgsea.C$NES <- -1* fgsea.C$NES
+    }
+    
+    # Flip the ordering for readability
+    if(comparison.set == "TP53_R172_LatevsTP53_R245_Late"){
+      comparison.set <- "TP53_R245_LatevsTP53_R172_Late"
+      fgsea.C$NES <- -1* fgsea.C$NES
+    }
+    
+    group1 <- unlist(strsplit(comparison.set,"vs"))[1]
+    group2 <- unlist(strsplit(comparison.set,"vs"))[2]
+    
+    title <- comparison.set
+    labNames <- c('xLab','yLab')
+    xlab <- bquote(.(labNames[1]) ~ x^2)
+    ylab <- bquote(.(labNames[2]) ~ y^2)
+    
+    my_xlab <- bquote(atop("Normalised Enrichment Score ", .(group2) %<->% .(group1)))
+    
+    
+    # Plot data -----------------------------------------------------
+    
+    # 1 ) Immune signatures
+    fgsea.C.immune <- fgsea.C %>% filter(pathway %in% c("IFN-G","Lymphocyte-Infiltration", "Macrophages-Monocytes",
+                                                        "TGF-B", "Wound.Healing" ))
+    # Clean path labels
+    fgsea.C.immune <- fgsea.C.immune %>% mutate(pathway = gsub("Lymphocyte-Infiltration","Lymphocyte Infiltration",pathway))
+    fgsea.C.immune <- fgsea.C.immune %>% mutate(pathway = gsub("Wound.Healing","Wound Healing",pathway))
+    fgsea.C.immune <- fgsea.C.immune %>% mutate(pathway = gsub("Macrophages-Monocytes","Macrophages Monocytes",pathway))
+    
+    cols <- c("IFN-G" = "#FFA500", "Lymphocyte Infiltration" = "#00FFFF", "Macrophages Monocytes" = "#008000"
+              , "TGF-B" = "#FFD700", "Wound Healing" = "#FF00FF")
+    
+    
+   
+    
+    ggplot(fgsea.C.immune, aes(x = NES, y = factor(pathway, levels = rev(levels(factor(pathway))))
+                               , size=factor(Significant, levels = c(FALSE,TRUE)) 
+                               , color=pathway))+
+      geom_point() +
+      scale_size_discrete(range = c(4, 10), name = 'Enrichment (p-value = 5%)', labels = c('Not significant', 'Significantly enriched'), drop = F)+
+      theme_bw()+
+      scale_x_continuous(limits = c(-2.5, 2.5)) + 
+      scale_colour_manual(values = cols, name = NULL) +
+      ylab(" ") +
+      ggtitle(paste0("Immune signatures in ",title)) + 
+      theme(plot.title = element_text(hjust = 0.5)) +
+      # ggtitle(paste(Cancer, ' - ', Pathway, ' - ', Comparison.Set, sep = '')) +
+      xlab(my_xlab) +
+      # theme(legend.position = "none")
+      guides(colour = guide_legend(override.aes = list(size=5)))  #+ 
+    # scale_y_discrete(position = "right") 
+    
+   ggsave(paste0(outdir,'Immune_signatures_',comparison.set,".png"), width = 7, height = 7)
+    
+    #) M1 & M2 macrophage signatures
+    fgsea.C.macrophage <- fgsea.C %>% filter(pathway %in% c("M1 Macrophages","M2 Macrophages"))
+    fgsea.C.macrophage$Significant <- factor(fgsea.C.macrophage$Significant,levels = c(FALSE, TRUE))
+    fgsea.C.macrophage$pathway <- gsub(" Macrophages","",fgsea.C.macrophage$pathway)
+    
+    cols <- c("#008000", "#008000")
+    
+    ggplot(fgsea.C.macrophage, aes(x = NES, y = factor(pathway, levels = rev(levels(factor(pathway))))
+                                   , size=factor(Significant, levels = c(FALSE,TRUE)) 
+                                   , color=pathway))+
+      geom_point(color = '#008000') +
+      scale_size_discrete(range = c(4, 10), name = 'Enrichment (p-value = 5%)', labels = c('Not significant', 'Significantly enriched'), drop = F)+
+      theme_bw()+
+      scale_x_continuous(limits = c(-2.5, 2.5)) + 
+      scale_colour_manual(values = cols, name = NULL) +
+      ylab(" ") +
+      ggtitle(paste0(title," - M1 and M2 macrophage signature")) + 
+      theme(plot.title = element_text(hjust = 0.5)) +
+      # ggtitle(paste(Cancer, ' - ', Pathway, ' - ', Comparison.Set, sep = '')) +
+      xlab(my_xlab) +
+      # theme(legend.position = "none")
+      guides(colour = guide_legend(override.aes = list(size=5)))  #+ 
+    #scale_y_discrete(position = "right")  
+    
+    ggsave(paste0(outdir,'Macrophage_signatures_',comparison.set,".png"), width = 10)
+    
+  }
+```
+
+# Plot ligands
+
+```{r}
+annot <- read.xlsx(paste0(indir,"metadata_v2.xlsx"), cols = 1:6)
+annot$sampleID <- paste0("SampleID.",annot$SampleNo)
+annot$sampleID <- gsub(" \\(",".",annot$sampleID)
+annot$sampleID <- gsub("\\)","",annot$sampleID)
+
+# Get the ordering correct - control, null, 172, 245
+annot <- annot %>%
+  mutate(GenotypeGroup= factor(GenotypeGroup,levels = c("Control","TP53null","TP53_R172","TP53_R245"))) %>%
+  arrange(GenotypeGroup, AgeGroup) 
+```
+
+```{r, eval = F}
+outdir <- "/researchers/simon.keam/RNA-QuantSeq/220120_NB501056_0747_AHFFW7BGXL/analyses/ligands/"
+ligands <- c("CD274","CD86")
+
+normCounts <-  read.csv(paste0(indir,"/","Norm.Log.Counts.RUV_k10.csv"), row.names = 1)
+normCounts <- normCounts[,annot$sampleID]
+annot$sampleID == colnames(normCounts)
+
+normCounts$SYMBOL_human <- mouse_human_map[match(rownames(normCounts),mouse_human_map$mgi_symbol),"hgnc_symbol"]
+
+ for(i in de_analyses_fn){
+   for(j in ligands){
+     
+      comparison.set <- gsub(".csv","",i)
+      group1 <- gsub("(.*)vs(.*)","\\1",comparison.set)
+      group2 <- gsub("(.*)vs(.*)","\\2",comparison.set)
+  
+      samps1 <- annot[which(annot$GenotypeGroup_AgeGroup == group1), "sampleID"]
+      samps2 <- annot[which(annot$GenotypeGroup_AgeGroup == group2), "sampleID"]
+      
+      gene_counts <- normCounts[which(normCounts$SYMBOL_human == j),c(samps1,samps2)]
+      
+      gene_counts_long <- data.frame(t(gene_counts))
+      gene_counts_long$group <-  factor(annot[match(rownames(gene_counts_long), annot$sampleID), "GenotypeGroup_AgeGroup"], levels = unique(annot$GenotypeGroup_AgeGroup))
+      gene_counts_long$group <- droplevels(gene_counts_long$group)
+      
+      xlabs <- paste(levels(gene_counts_long[,"group"]),"\n(N=",table(gene_counts_long[,"group"]),")",sep="")
+
+      if(j == "CD86"){
+        ylims <- c(5,8)        
+      }
+      if(j == "CD274"){
+          ylims <- c(-1,2.5)
+      }
+      
+      ggplot(gene_counts_long, aes_string(x= "group", y = colnames(gene_counts_long)[1], color = "group")) +   geom_boxplot() +
+    geom_point(position = position_jitter(w = 0.05, h = 0)) + stat_compare_means(method = "t.test") +
+    theme_bw() + ylab(paste(j,"log2cpm")) +
+    scale_x_discrete(labels=xlabs) + scale_color_manual(values = c("#E41A1C", "#377EB8")) + ylim(ylims)
+      ggsave(paste0(outdir,j,"_",comparison.set,".pdf"))
+      }
+ }
+```
+
+2.	Plot early: control, null, 172, 245
+3.	Plot late: control, null, 172, 245
+
+```{r}
+# Additional multi-way plots
+early <- annot[grepl("Early", annot$GenotypeGroup_AgeGroup),"sampleID"]
+
+for(j in ligands){
+     
+      gene_counts <- normCounts[which(normCounts$SYMBOL_human == j),early]
+      
+      gene_counts_long <- data.frame(t(gene_counts))
+      gene_counts_long$group <-  factor(annot[match(rownames(gene_counts_long), annot$sampleID), "GenotypeGroup"])
+      gene_counts_long$group <-  factor(annot[match(rownames(gene_counts_long), annot$sampleID), "GenotypeGroup_AgeGroup"], levels = unique(annot$GenotypeGroup_AgeGroup))
+      gene_counts_long$group <- droplevels(gene_counts_long$group)
+      
+      xlabs <- paste(levels(gene_counts_long[,"group"]),"\n(N=",table(gene_counts_long[,"group"]),")",sep="")
+
+      if(j == "CD86"){
+        ylims <- c(5,8)        
+      }
+      if(j == "CD274"){
+          ylims <- c(-1,2.5)
+      }
+      
+      ggplot(gene_counts_long, aes_string(x= "group", y = colnames(gene_counts_long)[1], color = "group")) +   geom_boxplot() +
+    geom_point(position = position_jitter(w = 0.05, h = 0)) + stat_compare_means(method = "anova") +
+    theme_bw() + ylab(paste(j,"log2cpm")) +
+    scale_x_discrete(labels=xlabs) + scale_color_manual(values = brewer.pal(4,"Set1")) + ylim(ylims)
+      ggsave(paste0(outdir,j,"_EARLY.pdf"))
+}
+
+# Additional multi-way plots
+late <- annot[grepl("Late", annot$GenotypeGroup_AgeGroup),"sampleID"]
+
+for(j in ligands){
+     
+      gene_counts <- normCounts[which(normCounts$SYMBOL_human == j),late]
+      
+      gene_counts_long <- data.frame(t(gene_counts))
+      gene_counts_long$group <-  factor(annot[match(rownames(gene_counts_long), annot$sampleID), "GenotypeGroup"])
+      gene_counts_long$group <-  factor(annot[match(rownames(gene_counts_long), annot$sampleID), "GenotypeGroup_AgeGroup"], levels = unique(annot$GenotypeGroup_AgeGroup))
+      gene_counts_long$group <- droplevels(gene_counts_long$group)
+      
+      xlabs <- paste(levels(gene_counts_long[,"group"]),"\n(N=",table(gene_counts_long[,"group"]),")",sep="")
+
+      if(j == "CD86"){
+        ylims <- c(5,8)        
+      }
+      if(j == "CD274"){
+          ylims <- c(-1,2.5)
+      }
+      
+      ggplot(gene_counts_long, aes_string(x= "group", y = colnames(gene_counts_long)[1], color = "group")) +   geom_boxplot() +
+    geom_point(position = position_jitter(w = 0.05, h = 0)) + stat_compare_means(method = "anova") +
+    theme_bw() + ylab(paste(j,"log2cpm")) +
+    scale_x_discrete(labels=xlabs) + scale_color_manual(values = brewer.pal(4,"Set1")) + ylim(ylims)
+      ggsave(paste0(outdir,j,"_LATE.pdf"))
+}
+
+```
+
+
+# Plot signature genes
+```{r}
+signature_im <- read_excel("~/Haupt_ExpB_LungProject/don_de_analyses/Freudenstein Supplementary  Tables1-18 ver 7.4.xlsx", sheet = 7, skip = 2)
+im_genes <- signature_im$Gene
+signature_tis <- read_excel("~/Haupt_ExpB_LungProject/don_de_analyses/Freudenstein Supplementary  Tables1-18 ver 7.4.xlsx", sheet = 9, skip = 2)
+tis_genes <- signature_tis$Gene
+```
+
+```{r, eval = F}
+outdir <- "/researchers/simon.keam/RNA-QuantSeq/220120_NB501056_0747_AHFFW7BGXL/analyses/signatures/"
+
+for(i in de_analyses_fn){
+    comparison.set <- gsub(".csv","",i)
+    
+     # Read DE analyses results
+    pre.ranked <- read.csv(paste0(indir,i), header = T)
+ 
+      # Flip the ordering for readability
+    if(comparison.set == "TP53_R172_EarlyvsTP53_R245_Early"){
+      comparison.set <- "TP53_R245_EarlyvsTP53_R172_Early"
+      pre.ranked$logFC <- -1* pre.ranked$logFC
+    }
+    
+    # Flip the ordering for readability
+    if(comparison.set == "TP53_R172_LatevsTP53_R245_Late"){
+      comparison.set <- "TP53_R245_LatevsTP53_R172_Late"
+      pre.ranked$logFC <- -1* pre.ranked$logFC
+    }
+    
+ 
+    group1 <- unlist(strsplit(comparison.set,"vs"))[1]
+    group2 <- unlist(strsplit(comparison.set,"vs"))[2]
+    
+    my_xlab <- bquote(atop("logFC ", .(group2) %<->% .(group1)))
+    
+    # Convert house symbols to human
+     pre.ranked$SYMBOL_human <- mouse_human_map[match(pre.ranked$SYMBOL,mouse_human_map$mgi_symbol),"hgnc_symbol"]
+    
+     # Rm NA genes
+     pre.ranked <- pre.ranked %>%
+       filter(!SYMBOL_human == "")
+     
+     # -----------------------------------------------------
+     signature <- "Immunomodulator genes"
+     
+      DE <- pre.ranked %>% 
+        filter(SYMBOL_human %in% im_genes)
+      DE <- DE %>%
+        left_join(signature_im, by = c("SYMBOL_human" = "Gene"))
+      DE$Significant = ifelse(DE$adj.P.Val<0.05, TRUE, FALSE)
+
+  # Plot
+  ggplot(DE, aes(x = logFC, y = factor(SYMBOL_human
+                                       , levels = rev(levels(factor(SYMBOL_human))))
+                 , size=Significant
+                 , color=Category)) +
+    geom_point()+
+    scale_size_discrete(range = c(2, 6), name = 'Differential Expression (p-value = 5%)', labels = c('Not Significant', 'Significant'), drop = F)+
+    theme_bw()+
+    scale_x_continuous(limits = c(-1, 1.2)) +
+    scale_y_discrete(position = "right") + 
+    ylab(" ") +
+    ggtitle(signature) + 
+    guides(colour = guide_legend(override.aes = list(size=4), title = 'Immunomodulator category')) + 
+    theme(axis.text.y=element_text(size=8)) +
+    scale_color_manual(values=c("#FA8072", "#B8860B", "#6B8E23","#32CD32","#00CED1","#BA55D3","#FF69B4")) + xlab(my_xlab)
+  ggsave(paste0(outdir,gsub(" ","_",signature),"_",comparison.set,".png"), height = 10)
+
+    # -----------------------------------------------------
+    signature <- "Tumour inflammation signature genes"
+
+    DE <- pre.ranked %>% 
+        filter(SYMBOL_human %in% tis_genes)
+    DE$Significant = ifelse(DE$adj.P.Val<0.05, TRUE, FALSE)
+
+  # Plot
+  ggplot(DE, aes(x = logFC, y = factor(SYMBOL_human
+                                       , levels = rev(levels(factor(SYMBOL_human))))
+                 , size=Significant
+                 , color="#FF0000")) +
+    geom_point()+
+    scale_size_discrete(range = c(2, 6), name = 'Differential Expression (p-value = 5%)', labels = c('Not Significant', 'Significant'), drop = F)+
+    theme_bw()+
+    scale_x_continuous(limits = c(-1, 1.2)) +
+    scale_y_discrete(position = "right") + 
+    ylab(" ") +
+    ggtitle(signature) + 
+    guides(colour = F) + 
+    theme(axis.text.y=element_text(size=8)) + xlab(my_xlab)
+  ggsave(paste0(outdir,gsub(" ","_",signature),"_",comparison.set,".png"), height = 10)
+  
+}
+```
+
+# Venn diagram of DE analyses
+```{r}
+outdir <- "/researchers/simon.keam/RNA-QuantSeq/220120_NB501056_0747_AHFFW7BGXL/analyses/venn/"
+timepoints <- c("Early","Late")
+
+for(timepoint in timepoints){
+  fns <- de_analyses_fn[grepl(paste0("TP53.*vsControl_",timepoint),de_analyses_fn)]
+  de_results <- lapply(paste0(indir,fns),read.csv)
+  names(de_results) <- gsub(paste0("_",timepoint,"vsControl_",timepoint,".csv"),"",fns)
+  
+  # get sig genes only
+  de_results <- lapply(de_results,function(x) x[x$adj.P.Val < 0.05,"SYMBOL"])
+  
+   # Chart
+  p <- venn.diagram(
+          x = de_results,
+          output=F,
+          filename = NULL,
+          
+          # Circles
+          lwd = 2,
+          lty = 'blank',
+          fill = brewer.pal(3,"Set1"),
+          
+          # Numbers
+          cex = 1.2,
+          fontface = "bold",
+          fontfamily = "sans",
+          
+          # Set names
+          cat.cex = 1,
+          cat.fontface = "bold",
+          cat.default.pos = "outer",
+          cat.fontfamily = "sans",
+  )
+  
+ 
+  png(paste0(outdir,timepoint,"_sig_genes_vs_cntrl_venn.png"), units="in", width=10, height=5, res=500)
+  grid.draw(p)
+  dev.off()
+
+  common_genes <- data.frame(ComplexHeatmap::list_to_matrix(de_results))
+  write.csv(common_genes, paste0(outdir, "common_genes_",timepoint,"_vs_cntrl.csv"))
+
+  
+  }
+
+```
+
+# Comparing DE results to drug databases
+
+```{r}
+TARGET <- read.xlsx("~/Haupt_small_projects/Franco_DE_functional_analyses_March22/data/TARGET_db_v3_02142015 (1).xlsx")
+DGIdb <- read.csv("~/Haupt_small_projects/Franco_DE_functional_analyses_March22/data/DGIdb_interactions_Feb2022.tsv", sep = "\t")
+```
+
+```{r}
+outdir <- "/researchers/simon.keam/RNA-QuantSeq/220120_NB501056_0747_AHFFW7BGXL/analyses/drug_screen/"
+fns2 <- de_analyses_fn[grepl("TP53.*vsControl_",de_analyses_fn)]
+  
+for(fn in fns2){ 
+  comparison.set <- gsub(".csv","",fn)
+  de_results <- read.csv(paste0(indir,fn))
+  
+  # get sig genes
+  # overlap with databases
+  de_results_target <- de_results %>%
+    filter(adj.P.Val < 0.05) %>%
+    mutate(SYMBOL_human = mouse_human_map[match(SYMBOL,mouse_human_map$mgi_symbol),"hgnc_symbol"]) %>%
+    filter(SYMBOL_human %in% TARGET$Gene) %>%
+    left_join(TARGET, by = c("SYMBOL_human" = "Gene"))
+
+    write.csv(de_results_target, paste0(outdir,comparison.set,"_TARGETdb.csv"), row.names = F)
+  
+    # DGIdb
+     de_results_DGIdb <- de_results %>%
+    filter(adj.P.Val < 0.05) %>%
+    mutate(SYMBOL_human = mouse_human_map[match(SYMBOL,mouse_human_map$mgi_symbol),"hgnc_symbol"]) %>%
+    filter(SYMBOL_human %in% DGIdb$gene_name) %>%
+    left_join(DGIdb, by = c("SYMBOL_human" = "gene_name"))
+
+     de_results_DGIdb <- de_results_DGIdb[!duplicated(de_results_DGIdb$SYMBOL_human),]
+     
+    write.csv(de_results_DGIdb, paste0(outdir,comparison.set,"_DGIdb.csv"), row.names = F)
+
+}
+
+```
+
+
+
+
