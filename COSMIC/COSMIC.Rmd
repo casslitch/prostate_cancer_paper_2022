@@ -1,0 +1,240 @@
+
+```{r}
+library(ggplot2)
+library(data.table)
+library(dplyr)
+library(scales)
+outdir <- "~/Haupt_ExpZ_PRAD/results/COSMIC/"
+
+patients_dat <- fread("~/Data/COSMIC/CosmicSample.tsv")
+TP53_vcf <- fread("~/Data/COSMIC/COSMIC_V95_hg38_TP53_MUTANT.csv")
+```
+
+
+```{r}
+TP53_vcf <- TP53_vcf %>% 
+  filter(PRIMARY_SITE == "prostate") %>%
+  filter(MUTATION_DESCRIPTION == "Substitution - Missense") 
+
+# to deal with low numbers, group together all muts at the same AA (regardless of the replacing amino acid)
+TP53_vcf <- TP53_vcf %>%
+  mutate(aa =gsub("p.([A-Z]{1}[0-9]{2,3}).*","\\1",MUTATION_AA))  %>%
+  mutate(Codon_number = gsub("p.[A-Z]{1}([0-9]{2,3}).*","\\1",MUTATION_AA)) 
+#table(gsub("([A-Z]{1}[0-9]{2,3})(.*)","\\2",data$ProtDescription))
+
+# Add patient info
+TP53_vcf <- TP53_vcf %>%
+  left_join(patients_dat %>% dplyr::select(age,sample_id), by = c( "ID_SAMPLE"= "sample_id" ))
+
+# Remove patients without age info, and dup patients
+TP53_vcf <- TP53_vcf %>% 
+  filter(!is.na(age)) %>%
+  filter(!duplicated(SAMPLE_NAME))
+```
+
+```{r}
+data_summary <- TP53_vcf %>%
+  group_by(aa,TUMOUR_ORIGIN,Codon_number) %>%
+  summarize(total = n())
+
+data_summary <- data_summary[order(as.numeric(data_summary$Codon_number)),]
+data_summary$aa <- factor(data_summary$aa, levels = unique(data_summary$aa))
+data_summary <- data_summary %>% 
+  filter(TUMOUR_ORIGIN %in% c("primary","metastasis"))
+write.csv(data_summary, paste0(outdir,"COSMIC_TP53_primary_vs_metastatic.csv"), row.names = F)
+```
+
+# Using 55 age cutoff
+```{r}
+# By age
+TP53_vcf <- TP53_vcf %>%
+   mutate(aged_grouped = cut(age, breaks=c(0,55,100)))
+
+data_summary <- TP53_vcf %>%
+  group_by(aa,TUMOUR_ORIGIN,Codon_number,aged_grouped) %>%
+  summarize(total = n())
+
+data_summary <- data_summary[order(as.numeric(data_summary$Codon_number)),]
+data_summary$aa <- factor(data_summary$aa, levels = unique(data_summary$aa))
+data_summary <- data_summary %>% 
+  filter(TUMOUR_ORIGIN %in% c("primary","metastasis"))
+write.csv(data_summary, paste0(outdir,"COSMIC_TP53_primary_vs_metastatic_byage.csv"), row.names = F)
+```
+
+```{r}
+mf_colours <- c("#984EA3", "#4DAF4A")
+ggplot(data_summary, mapping = aes(x = aa,y = total,fill = TUMOUR_ORIGIN)) +
+  geom_bar(stat = "identity") +
+  theme_bw()  + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + 
+  ylab("Number of patients") + xlab("mutation")  +
+  facet_grid(~aged_grouped, scales = "free_x") +
+  scale_fill_manual(values = mf_colours) + 
+  scale_color_manual(values = mf_colours)
+ggsave(paste0(outdir,"PRAD_COSMIC_TP53_primary_vs_metastatic_by_age.pdf"),width = 20)
+
+data_summary <- TP53_vcf %>%
+  group_by(aa,TUMOUR_ORIGIN,Codon_number,aged_grouped, MUTATION_ZYGOSITY) %>%
+  summarize(total = n())
+
+data_summary <- data_summary[order(as.numeric(data_summary$Codon_number)),]
+data_summary$aa <- factor(data_summary$aa, levels = unique(data_summary$aa))
+data_summary <- data_summary %>% 
+  filter(TUMOUR_ORIGIN %in% c("primary","metastasis")) %>%
+  filter(MUTATION_ZYGOSITY != "null")
+
+mf_colours <- c("#984EA3", "#4DAF4A")
+ggplot(data_summary, mapping = aes(x = aa,y = total,fill = TUMOUR_ORIGIN)) +
+  geom_bar(stat = "identity") +
+  theme_bw()  + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + 
+  ylab("Number of patients") + xlab("mutation")  +
+  facet_grid(~aged_grouped + MUTATION_ZYGOSITY, scales = "free_x") +
+  scale_fill_manual(values = mf_colours) + 
+  scale_color_manual(values = mf_colours)
+ggsave(paste0(outdir,"PRAD_COSMIC_TP53_primary_vs_metastatic_by_age_and_zygosity.pdf"),width = 25)
+
+```
+
+# Using 50 age cutoff
+```{r}
+# By age
+TP53_vcf <- TP53_vcf %>%
+   mutate(aged_grouped = cut(age, breaks=c(0,50,100)))
+
+data_summary <- TP53_vcf %>%
+  group_by(aa,TUMOUR_ORIGIN,Codon_number,aged_grouped) %>%
+  summarize(total = n())
+
+data_summary <- data_summary[order(as.numeric(data_summary$Codon_number)),]
+data_summary$aa <- factor(data_summary$aa, levels = unique(data_summary$aa))
+data_summary <- data_summary %>% 
+  filter(TUMOUR_ORIGIN %in% c("primary","metastasis"))
+```
+
+```{r}
+mf_colours <- c("#984EA3", "#4DAF4A")
+ggplot(data_summary, mapping = aes(x = aa,y = total,fill = TUMOUR_ORIGIN)) +
+  geom_bar(stat = "identity") +
+  theme_bw()  + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + 
+  ylab("Number of patients") + xlab("mutation")  +
+  facet_grid(~aged_grouped, scales = "free_x",space = "free_x") +
+  scale_fill_manual(values = mf_colours) + 
+  scale_color_manual(values = mf_colours)
+ggsave(paste0(outdir,"PRAD_COSMIC_TP53_primary_vs_metastatic_by_age_50cutoff.pdf"),width = 20)
+
+data_summary <- TP53_vcf %>%
+  group_by(aa,TUMOUR_ORIGIN,Codon_number,aged_grouped, MUTATION_ZYGOSITY) %>%
+  summarize(total = n())
+
+data_summary <- data_summary[order(as.numeric(data_summary$Codon_number)),]
+data_summary$aa <- factor(data_summary$aa, levels = unique(data_summary$aa))
+data_summary <- data_summary %>% 
+  filter(TUMOUR_ORIGIN %in% c("primary","metastasis")) %>%
+  filter(MUTATION_ZYGOSITY != "null")
+
+mf_colours <- c("#984EA3", "#4DAF4A")
+ggplot(data_summary, mapping = aes(x = aa,y = total,fill = TUMOUR_ORIGIN)) +
+  geom_bar(stat = "identity") +
+  theme_bw()  + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + 
+  ylab("Number of patients") + xlab("mutation")  +
+  facet_grid(~aged_grouped + MUTATION_ZYGOSITY, scales = "free_x") +
+  scale_fill_manual(values = mf_colours) + 
+  scale_color_manual(values = mf_colours)
+ggsave(paste0(outdir,"PRAD_COSMIC_TP53_primary_vs_metastatic_by_age_and_zygosity_50cutoff.pdf"),width = 25)
+
+```
+
+# Occurence with PTEN
+```{r}
+TP53_vcf <- fread("~/Data/COSMIC/COSMIC_V95_hg38_TP53_MUTANT.csv")
+PTEN_vcf <- fread("~/Data/COSMIC/COSMIC_V95_hg38_PTEN_MUTANT.csv")
+
+```
+
+```{r}
+TP53_vcf <- TP53_vcf %>% 
+  filter(PRIMARY_SITE == "prostate") %>%
+  filter(MUTATION_DESCRIPTION == "Substitution - Missense") 
+ # filter(GENOME_WIDE_SCREEN == "y")
+
+# to deal with low numbers, group together all muts at the same AA (regardless of the replacing amino acid)
+TP53_vcf <- TP53_vcf %>%
+  mutate(aa =gsub("p.([A-Z]{1}[0-9]{2,3}).*","\\1",MUTATION_AA))  %>%
+  mutate(Codon_number = gsub("p.[A-Z]{1}([0-9]{2,3}).*","\\1",MUTATION_AA)) 
+#table(gsub("([A-Z]{1}[0-9]{2,3})(.*)","\\2",data$ProtDescription))
+```
+
+```{r}
+PTEN_vcf <- PTEN_vcf %>% 
+  filter(PRIMARY_SITE == "prostate") %>%
+  filter(MUTATION_DESCRIPTION== "Whole gene deletion") %>%
+#  filter(GENOME_WIDE_SCREEN == "y")
+
+# to deal with low numbers, group together all muts at the same AA (regardless of the replacing amino acid)
+PTEN_vcf <- PTEN_vcf %>%
+  mutate(aa =gsub("p.([A-Z]{1}[0-9]{2,3}).*","\\1",MUTATION_AA))  %>%
+  mutate(Codon_number = gsub("p.[A-Z]{1}([0-9]{2,3}).*","\\1",MUTATION_AA)) 
+#table(gsub("([A-Z]{1}[0-9]{2,3})(.*)","\\2",data$ProtDescription))
+
+```
+
+```{r}
+TP53_vcf <- TP53_vcf %>%
+  mutate(PTEN = ifelse(TP53_vcf$SAMPLE_NAME %in% PTEN_vcf$SAMPLE_NAME, "Loss", "Wt"))
+table(TP53_vcf$PTEN)
+TP53_vcf %>%
+  filter(Codon_number %in% c("175","248")) %>%
+  group_by(PTEN) %>%
+  summarize(n = n())
+```
+
+```{r}
+summary_dat <- TP53_vcf %>%
+  group_by(PTEN) %>%
+  summarize( n = n())
+
+bp <- ggplot(summary_dat, aes(x="", y=n, fill=PTEN))+
+  geom_bar(width = 1, stat = "identity")
+
+blank_theme <- theme_minimal()+
+  theme(
+  axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  panel.border = element_blank(),
+  panel.grid=element_blank(),
+  axis.ticks = element_blank(),
+  plot.title=element_text(size=14, face="bold")
+  )
+
+pie <- bp + coord_polar("y", start=0) + scale_fill_brewer(palette="Set1") +
+  blank_theme  + theme(axis.text.x=element_blank()) +
+  geom_text(aes(y = c(880,180),  
+            label = percent(n/sum(n))), size=5)
+pie
+ggsave(paste0(outdir,"PRAD_COSMIC_TP53mut_and_PTEN_loss.pdf"))
+```
+```{r}
+summary_dat <- TP53_vcf %>%
+  filter(Codon_number == "273") %>%
+  group_by(PTEN) %>%
+  summarize( n = n())
+
+bp <- ggplot(summary_dat, aes(x="", y=n, fill=PTEN))+
+  geom_bar(width = 1, stat = "identity")
+
+blank_theme <- theme_minimal()+
+  theme(
+  axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  panel.border = element_blank(),
+  panel.grid=element_blank(),
+  axis.ticks = element_blank(),
+  plot.title=element_text(size=14, face="bold")
+  )
+
+pie <- bp + coord_polar("y", start=0) + scale_fill_brewer(palette="Set1") +
+  blank_theme  + theme(axis.text.x=element_blank()) +
+  geom_text(aes(y = c(88,60),  
+            label = percent(n/sum(n))), size=5)
+pie
+ggsave(paste0(outdir,"PRAD_COSMIC_TP53mut_273_and_PTEN_loss.pdf"))
+```
